@@ -55,8 +55,7 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
             self._handle_options_update
         )
 
-    @callback
-    def _handle_options_update(self, hass: HomeAssistant, entry: ConfigEntry):
+    async def _handle_options_update(self, hass: HomeAssistant, entry: ConfigEntry):
         """Handle options update."""
         new_interval_seconds = entry.options[CONF_SCAN_INTERVAL]
         new_interval = timedelta(seconds=new_interval_seconds)
