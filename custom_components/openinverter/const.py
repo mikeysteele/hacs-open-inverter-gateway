@@ -16,3 +16,14 @@ PLATFORMS = ["sensor"]
 # Base URL format for the API endpoint
 # Updated to use /status based on user feedback
 API_ENDPOINT_PATH = "/status"
+
+# Sensors that should be cached during the day and reset to 0 at midnight
+DAILY_SENSORS = [
+    "TodayGenerateEnergy",
+    "PV1EnergyToday",
+    "PV2EnergyToday",
+    "EnergyToUserToday",
+    "EnergyToGridToday",
+    "DischargeEnergyToday",
+    "ChargeEnergyToday",
+]

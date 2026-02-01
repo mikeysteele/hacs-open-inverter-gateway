@@ -12,7 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.const import CONF_IP_ADDRESS
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, CONF_SCAN_INTERVAL, API_ENDPOINT_PATH
+from .const import DOMAIN, CONF_SCAN_INTERVAL, API_ENDPOINT_PATH, DAILY_SENSORS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
         self.update_interval = new_interval
 
     async def _async_update_data(self):
-        """Fetch data from the API endpoint with caching support."""
+        """Fetch data from the API endpoint with selective caching support."""
         _LOGGER.debug("Attempting to fetch data from %s", self.api_url)
         try:
             # Use async_timeout for the request
@@ -89,31 +89,35 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
                 return data
 
         except (aiohttp.ClientError, asyncio.TimeoutError, Exception) as err:
-            # If we have valid cached data, we might want to return it
-            if self._last_valid_data and self._last_valid_time:
-                now = dt_util.now()
+            now = dt_util.now()
+            
+            # Scenario 1: Same day failure -> Cache ONLY daily sensors, zero others
+            if self._last_valid_data and self._last_valid_time and now.date() == self._last_valid_time.date():
+                _LOGGER.warning(
+                    "Error fetching data from %s (%s). Using cached data for DAILY sensors, resetting others.", 
+                    self.api_url, err
+                )
                 
-                # Check if it's the same day
-                if now.date() == self._last_valid_time.date():
-                    _LOGGER.warning(
-                        "Error fetching data from %s (%s). Using cached data from %s.", 
-                        self.api_url, err, self._last_valid_time
-                    )
-                    return self._last_valid_data
+                cached_data = {}
+                for key, value in self._last_valid_data.items():
+                    if key in DAILY_SENSORS:
+                        cached_data[key] = value # Keep daily values
+                    else:
+                        cached_data[key] = 0 # Zero out real-time values (Power, Voltage, etc.)
                 
-                # If it's a new day (past midnight), reset values to 0
-                else:
-                    _LOGGER.warning(
-                        "Error fetching data from %s (%s). New day detected, resetting values to 0.",
-                        self.api_url, err
-                    )
-                    # Create a dictionary with all 0s matching keys of last valid data
-                    # Note: We assume all values should be 0. 
-                    # If there are string values, they will become 0 too, which might be odd but fits "reset" logic.
-                    zero_data = {k: 0 for k in self._last_valid_data}
-                    return zero_data
+                return cached_data
+            
+            # Scenario 2: New day (or no cache) -> Reset EVERYTHING to 0
+            elif self._last_valid_data:
+                _LOGGER.warning(
+                    "Error fetching data from %s (%s). New day detected (or cache invalid), resetting ALL values to 0.",
+                    self.api_url, err
+                )
+                # Create a dictionary with all 0s
+                zero_data = {k: 0 for k in self._last_valid_data}
+                return zero_data
 
-            # If no cache, or logic fell through, raise the error
+            # If no cache at all, raise the error (sensors become unavailable)
             _LOGGER.warning("Error fetching data from %s: %s. No valid cache available.", self.api_url, err)
             raise UpdateFailed(f"Error fetching data: {err}") from err
 
