@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        pip install pre-commit
+        # Install ty if available via pip, or use a specific action/setup
+        # For now, we'll try to install it. If it fails, users might need to adjust.
+        # pip install ty
+        # Alternatively, rely on pre-commit doing its thing, but 'local' hooks need the tool installed.
+        curl -LsSf https://astral.sh/ty/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Run pre-commit
+      run: pre-commit run --all-files

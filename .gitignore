@@ -31,3 +31,12 @@ wheels/
 .idea/
 *.swp
 *.swo
+
+# Ruff
+.ruff_cache/
+
+# Ty
+.ty/
+
+# Mac OS
+.DS_Store

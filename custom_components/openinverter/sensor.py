@@ -1,34 +1,35 @@
 """Sensor platform for My Open Inverter Gateway."""
 
 import logging
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any
 
 from homeassistant.components.sensor import (
-    SensorEntity,
     SensorDeviceClass,
-    SensorStateClass,
+    SensorEntity,
     SensorEntityDescription,
+    SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    PERCENTAGE,
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,  # Added for RSSI
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
-    UnitOfPower,
+    UnitOfEnergy,  # Added for kWh
     UnitOfFrequency,
+    UnitOfPower,
     UnitOfTemperature,
-    UnitOfEnergy, # Added for kWh
-    PERCENTAGE,
-    SIGNAL_STRENGTH_DECIBELS_MILLIWATT, # Added for RSSI
-    UnitOfTime, # Added for Uptime
-    # Add other relevant constants from homeassistant.const if needed
+    UnitOfTime,  # Added for Uptime
 )
-from homeassistant.core import HomeAssistant, callback
+
+# Add other relevant constants from homeassistant.const if needed
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import OpenInverterDataUpdateCoordinator # Import the coordinator
+from .coordinator import OpenInverterDataUpdateCoordinator  # Import the coordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,16 +37,16 @@ _LOGGER = logging.getLogger(__name__)
 # IMPORTANT: Sensor definitions based on the provided Growatt JSON sample.
 # ==========================================================================
 # Adapt, remove, or comment out sensors as needed.
-SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
+SENSOR_DESCRIPTIONS: dict[str, SensorEntityDescription] = {
     "InverterStatus": SensorEntityDescription(
         key="InverterStatus",
-        name="Inverter Status Code", # Consider creating a template sensor later to map codes to names
+        name="Inverter Status Code",  # Consider creating a template sensor later to map codes to names
         icon="mdi:information-outline",
         # No units/classes for status codes unless you map them
     ),
     "InputPower": SensorEntityDescription(
         key="InputPower",
-        name="Input Power", # Total DC power?
+        name="Input Power",  # Total DC power?
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -95,7 +96,7 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
     ),
     "OutputPower": SensorEntityDescription(
         key="OutputPower",
-        name="Output Power", # AC power output
+        name="Output Power",  # AC power output
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -111,7 +112,7 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
     ),
     "L1ThreePhaseGridVoltage": SensorEntityDescription(
         key="L1ThreePhaseGridVoltage",
-        name="Grid Voltage L1", # Assuming L1, rename if single phase
+        name="Grid Voltage L1",  # Assuming L1, rename if single phase
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -136,7 +137,7 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
         name="Energy Generated Today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING, # Assumes it resets daily
+        state_class=SensorStateClass.TOTAL_INCREASING,  # Assumes it resets daily
         icon="mdi:counter",
     ),
     "TotalGenerateEnergy": SensorEntityDescription(
@@ -144,16 +145,16 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
         name="Total Energy Generated",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL, # Use TOTAL if it never resets
+        state_class=SensorStateClass.TOTAL,  # Use TOTAL if it never resets
         icon="mdi:counter",
     ),
     "TWorkTimeTotal": SensorEntityDescription(
         key="TWorkTimeTotal",
-        name="Total Work Time", # Value seems large, might need scaling or interpretation
-        native_unit_of_measurement=UnitOfTime.SECONDS, # Assuming seconds, adjust if needed
+        name="Total Work Time",  # Value seems large, might need scaling or interpretation
+        native_unit_of_measurement=UnitOfTime.SECONDS,  # Assuming seconds, adjust if needed
         icon="mdi:timer-sand",
-        state_class=SensorStateClass.TOTAL, # Total runtime
-        entity_registry_enabled_default=False, # Disabled by default as unit/scale might be unclear
+        state_class=SensorStateClass.TOTAL,  # Total runtime
+        entity_registry_enabled_default=False,  # Disabled by default as unit/scale might be unclear
     ),
     "PV1EnergyToday": SensorEntityDescription(
         key="PV1EnergyToday",
@@ -203,7 +204,7 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
-        entity_registry_enabled_default=False, # Often redundant if Inverter Temp exists
+        entity_registry_enabled_default=False,  # Often redundant if Inverter Temp exists
     ),
     # --- Battery Related Sensors (Add if you have a battery) ---
     "DischargePower": SensorEntityDescription(
@@ -251,9 +252,9 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
         # No units/classes for status codes unless mapped
     ),
     # --- Grid/Load Interaction ---
-    "ACPowerToUser": SensorEntityDescription( # Check if this is Import from Grid or Export to Grid
+    "ACPowerToUser": SensorEntityDescription(  # Check if this is Import from Grid or Export to Grid
         key="ACPowerToUser",
-        name="AC Power To User", # Rename for clarity (e.g., Grid Import Power?)
+        name="AC Power To User",  # Rename for clarity (e.g., Grid Import Power?)
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -261,7 +262,7 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
     ),
     "ACPowerToGrid": SensorEntityDescription(
         key="ACPowerToGrid",
-        name="AC Power To Grid", # Export Power
+        name="AC Power To Grid",  # Export Power
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -269,7 +270,7 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
     ),
     "INVPowerToLocalLoad": SensorEntityDescription(
         key="INVPowerToLocalLoad",
-        name="Inverter Power to Load", # Power consumed locally from Inverter
+        name="Inverter Power to Load",  # Power consumed locally from Inverter
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -277,28 +278,28 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
     ),
     "EnergyToUserToday": SensorEntityDescription(
         key="EnergyToUserToday",
-        name="Energy To User Today", # Rename for clarity (Grid Import Today?)
+        name="Energy To User Today",  # Rename for clarity (Grid Import Today?)
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
     ),
     "EnergyToUserTotal": SensorEntityDescription(
         key="EnergyToUserTotal",
-        name="Energy To User Total", # Rename for clarity (Total Grid Import?)
+        name="Energy To User Total",  # Rename for clarity (Total Grid Import?)
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
     ),
     "EnergyToGridToday": SensorEntityDescription(
         key="EnergyToGridToday",
-        name="Energy To Grid Today", # Export Today
+        name="Energy To Grid Today",  # Export Today
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
     ),
     "EnergyToGridTotal": SensorEntityDescription(
         key="EnergyToGridTotal",
-        name="Energy To Grid Total", # Total Export
+        name="Energy To Grid Total",  # Total Export
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
@@ -335,10 +336,10 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
     "Uptime": SensorEntityDescription(
         key="Uptime",
         name="Device Uptime",
-        native_unit_of_measurement=UnitOfTime.SECONDS, # Assuming seconds
+        native_unit_of_measurement=UnitOfTime.SECONDS,  # Assuming seconds
         icon="mdi:timer-outline",
-        state_class=SensorStateClass.TOTAL_INCREASING, # Assuming it increases and might reset
-        entity_registry_enabled_default=False, # Often less useful than HA uptime
+        state_class=SensorStateClass.TOTAL_INCREASING,  # Assuming it increases and might reset
+        entity_registry_enabled_default=False,  # Often less useful than HA uptime
     ),
     "WifiRSSI": SensorEntityDescription(
         key="WifiRSSI",
@@ -346,7 +347,7 @@ SENSOR_DESCRIPTIONS: Dict[str, SensorEntityDescription] = {
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category="diagnostic", # Mark as diagnostic
+        entity_category="diagnostic",  # Mark as diagnostic
     ),
     "HeapFree": SensorEntityDescription(
         key="HeapFree",
@@ -378,25 +379,26 @@ async def async_setup_entry(
         for json_key, description in SENSOR_DESCRIPTIONS.items():
             if json_key in coordinator.data:
                 _LOGGER.debug("Creating sensor for key: %s", json_key)
-                entities_to_add.append(
-                    OpenInverterSensor(coordinator, config_entry, description, device_name)
-                )
+                entities_to_add.append(OpenInverterSensor(coordinator, config_entry, description, device_name))
             else:
-                _LOGGER.debug( # Changed to debug level, less alarming if optional keys are missing
+                _LOGGER.debug(  # Changed to debug level, less alarming if optional keys are missing
                     "JSON key '%s' defined in SENSOR_DESCRIPTIONS not found in data from %s. Skipping sensor.",
                     json_key,
-                    coordinator.ip_address
+                    coordinator.ip_address,
                 )
     else:
         _LOGGER.error(
             "No initial data received from coordinator for %s. Cannot set up sensors.",
-            coordinator.ip_address
+            coordinator.ip_address,
         )
 
     if entities_to_add:
         async_add_entities(entities_to_add)
     else:
-        _LOGGER.warning("No sensors were added for %s. Check SENSOR_DESCRIPTIONS and device JSON output.", coordinator.ip_address)
+        _LOGGER.warning(
+            "No sensors were added for %s. Check SENSOR_DESCRIPTIONS and device JSON output.",
+            coordinator.ip_address,
+        )
 
 
 class OpenInverterSensor(CoordinatorEntity[OpenInverterDataUpdateCoordinator], SensorEntity):
@@ -409,7 +411,7 @@ class OpenInverterSensor(CoordinatorEntity[OpenInverterDataUpdateCoordinator], S
         coordinator: OpenInverterDataUpdateCoordinator,
         config_entry: ConfigEntry,
         description: SensorEntityDescription,
-        device_name: str, # Pass device name
+        device_name: str,  # Pass device name
     ):
         """Initialize the sensor."""
         super().__init__(coordinator)
@@ -419,16 +421,16 @@ class OpenInverterSensor(CoordinatorEntity[OpenInverterDataUpdateCoordinator], S
         self._attr_unique_id = f"{config_entry.entry_id}_{description.key}"
 
         # Use the fetched Hostname (or fallback) for the device name
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, config_entry.entry_id)},
-            name=device_name, # Use fetched or default name
-            manufacturer="Growatt", # Set manufacturer based on Hostname
-            # model="Model XYZ", # Can potentially parse model from Hostname or another field if available
-            # sw_version="1.2.3", # Firmware version if available in JSON
-            configuration_url=f"http://{coordinator.ip_address}",
-            # Add MAC address as connection identifier if desired
-            connections={("mac", coordinator.data.get("Mac"))} if coordinator.data.get("Mac") else None,
-        )
+        device_info_args = {
+            "identifiers": {(DOMAIN, config_entry.entry_id)},
+            "name": device_name,
+            "manufacturer": "Growatt",
+            "configuration_url": f"http://{coordinator.ip_address}",
+        }
+        if mac := coordinator.data.get("Mac"):
+            device_info_args["connections"] = {("mac", str(mac))}
+
+        self._attr_device_info = DeviceInfo(**device_info_args)
 
     @property
     def native_value(self) -> Any:
@@ -437,7 +439,7 @@ class OpenInverterSensor(CoordinatorEntity[OpenInverterDataUpdateCoordinator], S
         value = self.coordinator.data.get(json_key)
 
         if value is None:
-            return None # Don't process if value is missing
+            return None  # Don't process if value is missing
 
         # Handle specific cases or conversions if needed
         # Example: Convert TWorkTimeTotal if it's in a weird unit
@@ -449,21 +451,24 @@ class OpenInverterSensor(CoordinatorEntity[OpenInverterDataUpdateCoordinator], S
         #        return None # Handle conversion error
 
         # Ensure numeric types for measurement sensors
-        if self.entity_description.state_class == SensorStateClass.MEASUREMENT or \
-            self.entity_description.state_class == SensorStateClass.TOTAL or \
-            self.entity_description.state_class == SensorStateClass.TOTAL_INCREASING:
+        if (
+            self.entity_description.state_class == SensorStateClass.MEASUREMENT
+            or self.entity_description.state_class == SensorStateClass.TOTAL
+            or self.entity_description.state_class == SensorStateClass.TOTAL_INCREASING
+        ):
             try:
                 # Attempt conversion to float
                 return float(value)
             except (ValueError, TypeError):
                 _LOGGER.warning(
                     "Could not convert value '%s' for sensor '%s' (%s) to float.",
-                    value, self.entity_id, json_key
+                    value,
+                    self.entity_id,
+                    json_key,
                 )
-                return None # Return None if conversion fails
+                return None  # Return None if conversion fails
 
         # Return the raw value for text/status sensors or if no conversion needed
         return value
 
     # available property is handled by CoordinatorEntity
-

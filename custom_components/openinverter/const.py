@@ -5,10 +5,10 @@ DOMAIN = "open_inverter_gateway"
 
 # Configuration keys used in config_flow and options_flow
 CONF_IP_ADDRESS = "ip_address"
-CONF_SCAN_INTERVAL = "scan_interval" # User-defined refresh frequency in seconds
+CONF_SCAN_INTERVAL = "scan_interval"  # User-defined refresh frequency in seconds
 
 # Default values
-DEFAULT_SCAN_INTERVAL = 60 # Default polling interval in seconds (e.g., 1 minute)
+DEFAULT_SCAN_INTERVAL = 60  # Default polling interval in seconds (e.g., 1 minute)
 
 # Platforms to support (currently only sensor)
 PLATFORMS = ["sensor"]

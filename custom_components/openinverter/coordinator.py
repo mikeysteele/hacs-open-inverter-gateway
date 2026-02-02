@@ -1,20 +1,21 @@
 """DataUpdateCoordinator for the My Open Inverter Gateway integration."""
 
 import logging
-import async_timeout
-import aiohttp
 from datetime import timedelta
 
-from homeassistant.core import HomeAssistant, callback
+import aiohttp
+import async_timeout
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.const import CONF_IP_ADDRESS
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, CONF_SCAN_INTERVAL, API_ENDPOINT_PATH, DAILY_SENSORS
+from .const import API_ENDPOINT_PATH, CONF_SCAN_INTERVAL, DAILY_SENSORS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching data from the Open Inverter Gateway."""
@@ -29,9 +30,7 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
         self.session = async_get_clientsession(hass)
 
         # Determine the update interval from options or initial config
-        update_interval_seconds = entry.options.get(
-            CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL)
-        )
+        update_interval_seconds = entry.options.get(CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL))
         update_interval = timedelta(seconds=update_interval_seconds)
 
         _LOGGER.debug(
@@ -51,17 +50,13 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
         self._last_valid_time = None
 
         # Listen for changes to the options flow
-        self._unsub_options_update_listener = self.entry.add_update_listener(
-            self._handle_options_update
-        )
+        self._unsub_options_update_listener = self.entry.add_update_listener(self._handle_options_update)
 
     async def _handle_options_update(self, hass: HomeAssistant, entry: ConfigEntry):
         """Handle options update."""
         new_interval_seconds = entry.options[CONF_SCAN_INTERVAL]
         new_interval = timedelta(seconds=new_interval_seconds)
-        _LOGGER.debug(
-            "Updating polling interval for %s to %s", self.ip_address, new_interval
-        )
+        _LOGGER.debug("Updating polling interval for %s to %s", self.ip_address, new_interval)
         self.update_interval = new_interval
 
     async def _async_update_data(self):
@@ -73,7 +68,7 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
                 response = await self.session.get(self.api_url)
                 response.raise_for_status()
                 data = await response.json()
-             
+
                 # Basic validation
                 if not isinstance(data, dict):
                     err_msg = f"Invalid data format received (not a dictionary): {data}"
@@ -83,41 +78,47 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
                 # Update cache on success
                 self._last_valid_data = data
                 self._last_valid_time = dt_util.now()
-                
+
                 _LOGGER.debug("Data received from %s: %s", self.api_url, data)
                 return data
 
-        except (aiohttp.ClientError, asyncio.TimeoutError, Exception) as err:
+        except (TimeoutError, aiohttp.ClientError, Exception) as err:
             now = dt_util.now()
-            
+
             # Scenario 1: Same day failure -> Cache ONLY daily sensors, zero others
             if self._last_valid_data and self._last_valid_time and now.date() == self._last_valid_time.date():
                 _LOGGER.warning(
-                    "Error fetching data from %s (%s). Using cached data for DAILY sensors, resetting others.", 
-                    self.api_url, err
+                    "Error fetching data from %s (%s). Using cached data for DAILY sensors, resetting others.",
+                    self.api_url,
+                    err,
                 )
-                
+
                 cached_data = {}
                 for key, value in self._last_valid_data.items():
                     if key in DAILY_SENSORS:
-                        cached_data[key] = value # Keep daily values
+                        cached_data[key] = value  # Keep daily values
                     else:
-                        cached_data[key] = 0 # Zero out real-time values (Power, Voltage, etc.)
-                
+                        cached_data[key] = 0  # Zero out real-time values (Power, Voltage, etc.)
+
                 return cached_data
-            
+
             # Scenario 2: New day (or no cache) -> Reset EVERYTHING to 0
             elif self._last_valid_data:
                 _LOGGER.warning(
                     "Error fetching data from %s (%s). New day detected (or cache invalid), resetting ALL values to 0.",
-                    self.api_url, err
+                    self.api_url,
+                    err,
                 )
                 # Create a dictionary with all 0s
                 zero_data = {k: 0 for k in self._last_valid_data}
                 return zero_data
 
             # If no cache at all, raise the error (sensors become unavailable)
-            _LOGGER.warning("Error fetching data from %s: %s. No valid cache available.", self.api_url, err)
+            _LOGGER.warning(
+                "Error fetching data from %s: %s. No valid cache available.",
+                self.api_url,
+                err,
+            )
             raise UpdateFailed(f"Error fetching data: {err}") from err
 
     async def async_shutdown(self) -> None:

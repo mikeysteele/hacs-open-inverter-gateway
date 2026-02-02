@@ -4,12 +4,12 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.const import Platform # Use Platform enum
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import OpenInverterDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up My Open Inverter Gateway from a config entry."""
@@ -51,6 +51,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.info("Successfully unloaded Open Inverter Gateway entry %s", entry.entry_id)
     else:
         _LOGGER.warning("Failed to unload platforms for entry %s", entry.entry_id)
-
 
     return unload_ok
