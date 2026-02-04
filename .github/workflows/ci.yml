@@ -10,20 +10,19 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
+    - uses: actions/checkout@v6
+
+    - name: "Set up Python"
+      uses: actions/setup-python@v6
       with:
-        python-version: '3.12'
+        python-version-file: ".python-version"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
 
     - name: Install dependencies
       run: |
-        pip install pre-commit
-        # Install ty if available via pip, or use a specific action/setup
-        # For now, we'll try to install it. If it fails, users might need to adjust.
-        # pip install ty
-        # Alternatively, rely on pre-commit doing its thing, but 'local' hooks need the tool installed.
-        curl -LsSf https://astral.sh/ty/install.sh | sh
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        uv sync --locked --all-extras --dev
 
     - name: Run pre-commit
       run: pre-commit run --all-files
