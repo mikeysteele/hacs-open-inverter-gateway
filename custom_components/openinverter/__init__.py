@@ -19,6 +19,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create the data update coordinator
     coordinator = OpenInverterDataUpdateCoordinator(hass, entry)
 
+    # Attempt to load saved data (persistence)
+    await coordinator.async_load_saved_data()
+
     # Fetch initial data so we have it when platforms are set up.
     # This will also raise ConfigEntryNotReady if the first fetch fails.
     await coordinator.async_config_entry_first_refresh()

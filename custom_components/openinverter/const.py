@@ -3,6 +3,10 @@
 # Domain for the integration (needs to match folder name and manifest.json)
 DOMAIN = "open_inverter_gateway"
 
+# Storage constants
+STORAGE_KEY = "open_inverter_gateway.storage"
+STORAGE_VERSION = 1
+
 # Configuration keys used in config_flow and options_flow
 CONF_IP_ADDRESS = "ip_address"
 CONF_SCAN_INTERVAL = "scan_interval"  # User-defined refresh frequency in seconds

@@ -9,10 +9,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_IP_ADDRESS
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import API_ENDPOINT_PATH, CONF_SCAN_INTERVAL, DAILY_SENSORS, DOMAIN
+from .const import API_ENDPOINT_PATH, CONF_SCAN_INTERVAL, DAILY_SENSORS, DOMAIN, STORAGE_KEY, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
         # Determine the update interval from options or initial config
         update_interval_seconds = entry.options.get(CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL))
         update_interval = timedelta(seconds=update_interval_seconds)
+        self._base_update_interval = update_interval
 
         _LOGGER.debug(
             "Initializing OpenInverter coordinator for %s with update interval %s",
@@ -49,8 +51,29 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
         self._last_valid_data = None
         self._last_valid_time = None
 
+        # Initialize storage
+        self._store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}.{entry.entry_id}")
+
         # Listen for changes to the options flow
         self._unsub_options_update_listener = self.entry.add_update_listener(self._handle_options_update)
+
+    async def async_load_saved_data(self) -> None:
+        """Load saved data from storage."""
+        try:
+            stored_data = await self._store.async_load()
+            if stored_data:
+                self._last_valid_data = stored_data.get("data")
+                if timestamp := stored_data.get("timestamp"):
+                    self._last_valid_time = dt_util.parse_datetime(timestamp)
+
+                _LOGGER.debug(
+                    "Loaded saved data for %s from %s. Data age: %s",
+                    self.ip_address,
+                    self._store.path,
+                    self._last_valid_time,
+                )
+        except Exception as err:
+            _LOGGER.warning("Error loading saved data for %s: %s", self.ip_address, err)
 
     async def _handle_options_update(self, hass: HomeAssistant, entry: ConfigEntry):
         """Handle options update."""
@@ -58,6 +81,7 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
         new_interval = timedelta(seconds=new_interval_seconds)
         _LOGGER.debug("Updating polling interval for %s to %s", self.ip_address, new_interval)
         self.update_interval = new_interval
+        self._base_update_interval = new_interval
 
     async def _async_update_data(self):
         """Fetch data from the API endpoint with selective caching support."""
@@ -79,11 +103,45 @@ class OpenInverterDataUpdateCoordinator(DataUpdateCoordinator):
                 self._last_valid_data = data
                 self._last_valid_time = dt_util.now()
 
+                # Persist data
+                try:
+                    await self._store.async_save(
+                        {
+                            "data": self._last_valid_data,
+                            "timestamp": self._last_valid_time.isoformat(),
+                        }
+                    )
+                except Exception as err:
+                    _LOGGER.warning("Error saving data for %s: %s", self.ip_address, err)
+
+                # Reset backoff if needed
+                if self.update_interval != self._base_update_interval:
+                    _LOGGER.info(
+                        "Connection to %s restored. Resetting update interval to %s",
+                        self.ip_address,
+                        self._base_update_interval,
+                    )
+                    self.update_interval = self._base_update_interval
+
                 _LOGGER.debug("Data received from %s: %s", self.api_url, data)
                 return data
 
         except (TimeoutError, aiohttp.ClientError, Exception) as err:
             now = dt_util.now()
+
+            # Exponential backoff
+            if self.update_interval and self.update_interval < timedelta(minutes=5):
+                new_interval = self.update_interval * 2
+                if new_interval > timedelta(minutes=5):
+                    new_interval = timedelta(minutes=5)
+
+                _LOGGER.warning(
+                    "Error fetching data from %s: %s. Increasing update interval to %s",
+                    self.api_url,
+                    err,
+                    new_interval,
+                )
+                self.update_interval = new_interval
 
             # Scenario 1: Same day failure -> Cache ONLY daily sensors, zero others
             if self._last_valid_data and self._last_valid_time and now.date() == self._last_valid_time.date():
