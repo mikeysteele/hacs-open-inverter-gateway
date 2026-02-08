@@ -13,6 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,  # Added for RSSI
+    EntityCategory,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
     UnitOfEnergy,  # Added for kWh
@@ -347,7 +348,7 @@ SENSOR_DESCRIPTIONS: dict[str, SensorEntityDescription] = {
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category="diagnostic",  # Mark as diagnostic
+        entity_category=EntityCategory.DIAGNOSTIC,  # Mark as diagnostic
     ),
     "HeapFree": SensorEntityDescription(
         key="HeapFree",
@@ -355,7 +356,7 @@ SENSOR_DESCRIPTIONS: dict[str, SensorEntityDescription] = {
         native_unit_of_measurement="bytes",
         icon="mdi:memory",
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category="diagnostic",
+        entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
     # Add other Heap values if desired (MaxAlloc, MinFree, Fragmentation)
